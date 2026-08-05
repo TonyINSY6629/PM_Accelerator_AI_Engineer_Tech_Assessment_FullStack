@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets — never commit
+.env
+
+# Database (generated on first run)
+*.db
+
+# PyCharm
+.idea/
+
+# local exports
+exports/
+
+# Frontend (later)
+node_modules/
+dist/
+build/
