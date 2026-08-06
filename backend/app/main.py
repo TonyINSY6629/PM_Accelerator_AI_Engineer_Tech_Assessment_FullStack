@@ -1,7 +1,9 @@
 import requests
 from fastapi import FastAPI, HTTPException, Query, Response #to build REST API, used uvicorn to run in browser
+from fastapi.middleware.cors import CORSMiddleware # ----------the browser refuses any cross-origin reply the server has not opted into
 from pydantic import BaseModel
 
+from app.clients.openweather import reverse_geocode_location
 from app.db.database import init_db
 from app.db import repository
 from app.services import lookups
@@ -11,6 +13,22 @@ from app.services import export as export_service
 init_db()
 
 app = FastAPI(title="Weather App API")
+
+ALLOWED_ORIGINS = [ # -------------------------------------------the frontend dev server runs on its own port, so it counts as a different origin from uvicorn
+    "http://localhost:5173", # ----------------------------------Vite's default
+    "http://127.0.0.1:5173", # ----------------------------------same server, but the browser treats this spelling as a separate origin
+    "http://localhost:3000", # ----------------------------------kept in case the frontend ends up on the React/Next default instead
+    "http://127.0.0.1:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False, # ----------------------------------session_id travels in the body or the query string, never in a cookie, so credentialed requests are not needed
+    allow_methods=["*"], # --------------------------------------GET / POST / PUT / DELETE, plus the OPTIONS preflight the browser sends first
+    allow_headers=["*"],
+)
+
 @app.get("/api/info") # ----------------------------------------get things via APIs
 def get_app_info():
     return {
@@ -51,6 +69,17 @@ def start_session():
     session_id = repository.create_session()
     return {"session_id": session_id}
 
+@app.get("/api/geocode/reverse") # ------------------------------the browser knows where the user is, but only as coordinates; naming the place needs the API key, so it happens here
+def reverse_geocode( # ------------------------------------------the bounds are the real ones for latitude and longitude, so nonsense never reaches OpenWeather
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+) -> dict:
+    try:
+        matches = reverse_geocode_location(lat, lon)
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="Geocoding service is unavailable.")
+
+    return {"matches": matches} # -------------------------------an empty list is a normal answer, not an error: coordinates in open water simply have no place name, and the frontend falls back to typing
 
 class LookupRequest(BaseModel): # ------------------------------the shape of the request body for lookup
     session_id: int
