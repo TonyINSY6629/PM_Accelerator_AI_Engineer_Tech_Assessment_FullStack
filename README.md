@@ -8,7 +8,7 @@ A weather application that accepts flexible location input, retrieves real-time 
 independent weather providers, persists it in a relational database with full CRUD, and exports
 records to CSV.
 
-> **Status:** backend complete; frontend in progress.
+> **Status:** complete — backend, frontend, and the bonus media integration.
 
 ---
 
@@ -49,6 +49,7 @@ Two weather providers are used deliberately, each for what it does best:
 | **OpenWeather** | geocoding, current conditions, icons | Geocoding returns up to 5 ranked matches, which powers location disambiguation |
 | **Open-Meteo** | daily data stored in the database | Returns daily aggregates natively, in local time, with no API key |
 | **YouTube Data API v3** | walking-tour videos for the searched city | Bonus media integration; results are cached in memory because search costs 100 of 10,000 daily quota units |
+
 ---
 
 ## System Architecture
@@ -99,7 +100,10 @@ Diagrams follow the conventions in *Systems Analysis and Design in a Changing Wo
 | Database | **SQLite** | Zero setup — no server, no credentials. A reviewer clones and runs; the database builds itself on first start. The schema is standard SQL and ports to PostgreSQL unchanged |
 | HTTP client | **requests** | Server-side calls to both providers |
 | Config | **python-dotenv** | Keeps the API key out of a public repository |
-| Frontend | **JavaScript** _(in progress)_ | Required by the assessment; no Python/Java frontend frameworks |
+| Frontend | **React + TanStack Start (TypeScript)** | JavaScript stack as required; TypeScript catches shape mismatches against the API before they reach the browser |
+| Styling | **Tailwind CSS** | Utility classes keep the one-page layout in the markup rather than in a parallel stylesheet |
+| Map | **Leaflet + OpenStreetMap** | No API key, no billing account, no quota — the coordinates already stored on every location are all it needs |
+| Data fetching | **TanStack Query** | Caching and invalidation after create, update, and delete, so the history list stays honest without manual refetching |
 
 ---
 
@@ -107,7 +111,10 @@ Diagrams follow the conventions in *Systems Analysis and Design in a Changing Wo
 
 ### Prerequisites
 - Python 3.13
+- Node.js 20+ (for the frontend)
 - A free [OpenWeather API key](https://openweathermap.org/api) (Open-Meteo needs none)
+- Optional: a [YouTube Data API v3 key](https://console.cloud.google.com/) for the walking-tour
+  videos. Without it the app runs normally and simply shows none.
 
 ### Backend
 
@@ -123,6 +130,7 @@ Create `backend/.env`:
 
 ```
 OPENWEATHER_API_KEY=your_key_here
+YOUTUBE_API_KEY=your_key_here      # optional
 ```
 
 Start the server from the **project root**:
@@ -135,14 +143,27 @@ uvicorn app.main:app --reload --app-dir backend
 - **Interactive docs: <http://127.0.0.1:8000/docs>** — every endpoint is callable from the browser
 
 The database is created and seeded automatically on first start. No migration step.
-The API allows browser requests from `localhost:5173` and `localhost:3000` (and their `127.0.0.1`
-spellings). If the frontend is served from a different port, add it to `ALLOWED_ORIGINS` in
-`backend/app/main.py` — otherwise the browser will block every response, even though the server
-answers correctly.
+The API allows browser requests from `localhost:8080` — the port this project's Vite config serves
+on — plus `localhost:5173` and `localhost:3000` and their `127.0.0.1` spellings. If the frontend is
+served from anywhere else, add that origin to `ALLOWED_ORIGINS` in `backend/app/main.py`; otherwise
+the browser blocks every response, even though the server answers correctly.
 
 ### Frontend
 
-_To be added._
+In a second terminal, from the **`frontend` folder**:
+
+```bash
+npm install
+npm run dev
+```
+
+- App: <http://localhost:8080>
+
+The frontend needs no API keys and no authentication. It reads the backend URL from
+`VITE_WEATHER_API_BASE`, defaulting to `http://localhost:8000`, so nothing needs configuring for
+local use. Set that variable only if the backend runs elsewhere.
+
+Both servers must be running: the page loads without the backend, but every request fails.
 
 ---
 
@@ -152,6 +173,7 @@ _To be added._
 |---|---|---|
 | `GET` | `/api/info` | Developer details and PM Accelerator description |
 | `POST` | `/api/sessions` | Start a visit; returns a `session_id` |
+| `GET` | `/api/geocode?q=&limit=` | Up to 5 ranked candidate places, so the user can disambiguate before anything is stored |
 | `GET` | `/api/geocode/reverse?lat=&lon=` | Resolve browser-reported coordinates to a place name |
 | `POST` | `/api/lookups` | **Create** — validate, fetch from both providers, persist |
 | `GET` | `/api/lookups` | **Read all** — every stored record, newest first |
@@ -195,6 +217,7 @@ class of off-by-one-day bugs.
 **Coordinates are rounded to 4 decimal places (~11 m) at the geocoding boundary.** Providers return
 slightly different coordinates for the same place depending on the query string, which would defeat
 `UNIQUE(latitude, longitude)`. Rounding on entry makes deduplication reliable.
+
 **Reverse geocoding resolves to the canonical city, not the exact point.** Coordinates inside the
 Bronx come back as "New York" with Manhattan's coordinates rather than the ones supplied. The
 displayed name is therefore coarser than the user's actual position — acceptable for weather, which
@@ -233,9 +256,9 @@ it does not remove the location, which is a fact about the world rather than abo
 | B5 | RESTful API | ✅ `GET` / `POST` / `PUT` / `DELETE`, resource-oriented URLs |
 | B6 | Additional API integration | ✅ YouTube Data API v3 — "4K {city} walking tour", proxied server-side |
 | B7 | Data export | ✅ CSV |
-| F1–F8 | Frontend | ⬜ in progress |
-| X1 | Developer name in app | ✅ `/api/info` |
-| X2 | PM Accelerator description in app | ✅ `/api/info` |
+| F1–F8 | Frontend | ✅ one page: search with disambiguation, browser geolocation, current conditions, 5-day forecast, map, videos, and full CRUD with CSV export |
+| X1 | Developer name in app | ✅ shown in the UI, and served by `/api/info` |
+| X2 | PM Accelerator description in app | ✅ shown in the UI, and served by `/api/info` |
 
 ---
 
@@ -256,6 +279,10 @@ Deliberate trade-offs, noted rather than hidden:
   survives between requests but is lost on restart. YouTube's `search.list` costs 100 of 10,000
   daily quota units — roughly 100 searches per day — so caching is a necessity rather than an
   optimisation. A production version would persist results with a TTL.
+- **`LookupRecord` describes the detail response, and list rows are cast to it.** `GET /api/lookups`
+  returns a summary without daily rows or coordinates. Splitting the type into a summary and a
+  detail record would make that impossible to confuse.
+
 ---
 
 ## License

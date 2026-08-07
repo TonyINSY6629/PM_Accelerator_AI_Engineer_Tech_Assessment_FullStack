@@ -15,6 +15,7 @@ import {
   updateLookup,
 } from "@/lib/weather-api";
 import { clampDateRange, makeDemoLookup, offsetDate, todayIso } from "@/lib/weather-utils";
+import { AboutSection } from "./AboutSection";
 import { CurrentWeather } from "./CurrentWeather";
 import { ForecastRow } from "./ForecastRow";
 import { LookupHistory } from "./LookupHistory";
@@ -341,6 +342,8 @@ export function WeatherPage() {
                 </p>
               </div>
             )}
+
+            <AboutSection />
           </section>
         </div>
       </div>

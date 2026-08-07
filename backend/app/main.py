@@ -39,31 +39,21 @@ def get_app_info():
         "developer email": "<tywg18.na@gmail.com>",
         "developer LinkedIn page": "https://www.linkedin.com/in/tonywang-br/",
         "app_name": "Weather App (AI Engineer Tech Assessment - Full Stack)",
-        "pm_accelerator": """
-        The Product Manager Accelerator Program is designed to support PM professionals through every stage of their careers. 
-        From students looking for entry-level jobs to Directors looking to take on a leadership role, our program has helped over hundreds of students fulfill their career aspirations.
-        Our Product Manager Accelerator community are ambitious and committed. Through our program they have learnt, honed and developed new PM and leadership skills, giving them a strong foundation for their future endeavors.
-        Here are the examples of services we offer:
-        🚀 PMA Pro
-        End-to-end product manager job hunting program that helps you master FAANG-level Product Management skills, conduct unlimited mock interviews, and gain job referrals through our largest alumni network. 
-        25% of our offers came from tier 1 companies and get paid as high as $800K/year. 
+        "pm_accelerator": "\n\n".join([ # -----------------------joined rather than one triple-quoted block so the JSON carries no stray indentation, and so this text stays identical to what AboutSection.tsx renders in the UI
+            "The Product Manager Accelerator Program is designed to support PM professionals through "
+            "every stage of their careers. From students looking for entry-level jobs to Directors "
+            "looking to take on a leadership role, this program has helped hundreds of students "
+            "fulfill their career aspirations.",
 
-        🚀 AI PM Bootcamp
-        Gain hands-on AI Product Management skills by building a real-life AI product with a team of AI Engineers, data scientists, and designers. 
-        We will also help you launch your product with real user engagement using our 100,000+ PM community and social media channels. 
+            "The Product Manager Accelerator community of PM Accelerator is ambitious and committed. "
+            "Through structured training, and a supportive community, PM Accelerator empowers their "
+            "members to fast-track their PM careers and become confident, capable product leaders.",
 
-        🚀 PMA Power Skills
-        Designed for existing product managers to sharpen their product management skills, leadership skills, and executive presentation skills
-
-        🚀 PMA Leader
-        We help you accelerate your product management career, get promoted to Director and product executive levels, and win in the board room. 
-
-        🚀 1:1 Resume Review
-        We help you rewrite your killer product manager resume to stand out from the crowd, with an interview guarantee. 
-        Get started by using our FREE killer PM resume template used by over 14,000 product managers. https://www.drnancyli.com/pmresume
-
-        🚀 We also published over 500+ free training and courses. 
-        Please go to my YouTube channel https://www.youtube.com/c/drnancyli and Instagram @drnancyli to start learning for free today.""",
+            "PM Accelerator is also committed to educational fairness — offering free Product "
+            "Management education to teenagers from underserved families, with the goal of "
+            "establishing 200 schools worldwide over the next 20 years.",
+        ]),
+        "pm_accelerator_source": "https://www.pmaccelerator.io/",
     }
 
 
