@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware # ----------the browser refus
 from pydantic import BaseModel
 
 from app.clients.openweather import reverse_geocode_location
+from app.clients.youtube import search_walking_tour
 from app.db.database import init_db
 from app.db import repository
 from app.services import lookups
@@ -179,3 +180,13 @@ def export_one_lookup(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+@app.get("/api/lookups/{lookup_id}/videos") # -------------------the walking-tour videos are about the place, so they are looked up through the record that names it
+def get_lookup_videos(lookup_id: int) -> dict:
+    record = repository.get_lookup(lookup_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"No lookup found with id {lookup_id}.")
+
+    videos = search_walking_tour(record["location_name"], record["country"]) # ----no try/except: this client answers with an empty list instead of raising, so a YouTube outage can never turn into an error the weather app has to show
+
+    return {"videos": videos} # ---------------------------------an empty list means "no videos", whether none exist or the quota is gone; the frontend renders nothing either way and the page is unharmed

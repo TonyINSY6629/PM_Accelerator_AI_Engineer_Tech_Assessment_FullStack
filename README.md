@@ -48,16 +48,16 @@ Two weather providers are used deliberately, each for what it does best:
 |---|---|---|
 | **OpenWeather** | geocoding, current conditions, icons | Geocoding returns up to 5 ranked matches, which powers location disambiguation |
 | **Open-Meteo** | daily data stored in the database | Returns daily aggregates natively, in local time, with no API key |
-
+| **YouTube Data API v3** | walking-tour videos for the searched city | Bonus media integration; results are cached in memory because search costs 100 of 10,000 daily quota units |
 ---
 
 ## System Architecture
 
 ```
-Browser (frontend)  ──►  FastAPI backend  ──►  OpenWeather  (geocoding + current)
-                               │           ──►  Open-Meteo   (daily forecast/archive)
-                               ▼
-                        SQLite (weather.db)
+Browser (frontend)    ──►    FastAPI backend     ──►  OpenWeather  (geocoding + current)
+                                   │             ──►  Open-Meteo   (daily forecast/archive)
+                                   ▼             ──►  YouTube      (walking-tour videos)
+                          SQLite (weather.db)
 ```
 
 The frontend never contacts a weather provider directly. All external calls, all database access,
@@ -135,6 +135,10 @@ uvicorn app.main:app --reload --app-dir backend
 - **Interactive docs: <http://127.0.0.1:8000/docs>** — every endpoint is callable from the browser
 
 The database is created and seeded automatically on first start. No migration step.
+The API allows browser requests from `localhost:5173` and `localhost:3000` (and their `127.0.0.1`
+spellings). If the frontend is served from a different port, add it to `ALLOWED_ORIGINS` in
+`backend/app/main.py` — otherwise the browser will block every response, even though the server
+answers correctly.
 
 ### Frontend
 
@@ -148,12 +152,14 @@ _To be added._
 |---|---|---|
 | `GET` | `/api/info` | Developer details and PM Accelerator description |
 | `POST` | `/api/sessions` | Start a visit; returns a `session_id` |
+| `GET` | `/api/geocode/reverse?lat=&lon=` | Resolve browser-reported coordinates to a place name |
 | `POST` | `/api/lookups` | **Create** — validate, fetch from both providers, persist |
 | `GET` | `/api/lookups` | **Read all** — every stored record, newest first |
 | `GET` | `/api/lookups/{id}` | **Read one** — full record with nested daily rows |
 | `PUT` | `/api/lookups/{id}` | **Update** — re-validate, re-fetch, replace daily rows |
 | `DELETE` | `/api/lookups/{id}` | **Delete** — cascades to daily rows |
 | `GET` | `/api/lookups/{id}/export?format=csv` | **Export** to CSV, logged in `export_log` |
+| `GET` | `/api/lookups/{id}/videos` | Walking-tour videos for the record's city; empty list if unavailable |
 
 Errors use meaningful status codes: `422` for invalid input, `404` for a missing record,
 `502` when an upstream provider fails.
@@ -189,6 +195,12 @@ class of off-by-one-day bugs.
 **Coordinates are rounded to 4 decimal places (~11 m) at the geocoding boundary.** Providers return
 slightly different coordinates for the same place depending on the query string, which would defeat
 `UNIQUE(latitude, longitude)`. Rounding on entry makes deduplication reliable.
+**Reverse geocoding resolves to the canonical city, not the exact point.** Coordinates inside the
+Bronx come back as "New York" with Manhattan's coordinates rather than the ones supplied. The
+displayed name is therefore coarser than the user's actual position — acceptable for weather, which
+is a city-scale phenomenon — and it has a useful consequence: a GPS-detected location and a typed
+one resolve to identical coordinates, so they deduplicate to a single `location` row instead of
+forking into two.
 
 **The raw user query is stored alongside the resolved location.** `raw_query` records what was
 typed; `location` records what it resolved to. They are usually different, and both matter.
@@ -219,7 +231,7 @@ it does not remove the location, which is a fact about the world rather than abo
 | B3 | UPDATE — with validation | ✅ re-validates and re-fetches |
 | B4 | DELETE | ✅ cascades |
 | B5 | RESTful API | ✅ `GET` / `POST` / `PUT` / `DELETE`, resource-oriented URLs |
-| B6 | Additional API integration | ⬜ planned |
+| B6 | Additional API integration | ✅ YouTube Data API v3 — "4K {city} walking tour", proxied server-side |
 | B7 | Data export | ✅ CSV |
 | F1–F8 | Frontend | ⬜ in progress |
 | X1 | Developer name in app | ✅ `/api/info` |
@@ -240,7 +252,10 @@ Deliberate trade-offs, noted rather than hidden:
   are visible to everyone.
 - **CSV is the only export format implemented.** The schema and endpoint accommodate JSON, XML,
   Markdown, and PDF.
-
+- **Video results are cached in memory, not persisted.** A module-level dictionary keyed by city
+  survives between requests but is lost on restart. YouTube's `search.list` costs 100 of 10,000
+  daily quota units — roughly 100 searches per day — so caching is a necessity rather than an
+  optimisation. A production version would persist results with a TTL.
 ---
 
 ## License
