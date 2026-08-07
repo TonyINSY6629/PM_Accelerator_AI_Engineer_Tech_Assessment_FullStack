@@ -15,7 +15,9 @@ __pycache__/
 # local exports
 exports/
 
-# Frontend (later)
+# Frontend
 node_modules/
 dist/
 build/
+.output/
+.wrangler/

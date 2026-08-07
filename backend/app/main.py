@@ -3,7 +3,7 @@ from fastapi import FastAPI, HTTPException, Query, Response #to build REST API, 
 from fastapi.middleware.cors import CORSMiddleware # ----------the browser refuses any cross-origin reply the server has not opted into
 from pydantic import BaseModel
 
-from app.clients.openweather import reverse_geocode_location
+from app.clients.openweather import geocode_location, reverse_geocode_location
 from app.clients.youtube import search_walking_tour
 from app.db.database import init_db
 from app.db import repository
@@ -16,6 +16,8 @@ init_db()
 app = FastAPI(title="Weather App API")
 
 ALLOWED_ORIGINS = [ # -------------------------------------------the frontend dev server runs on its own port, so it counts as a different origin from uvicorn
+    "http://localhost:8080",  # ----------------------------------what this project's Vite config actually serves on
+    "http://127.0.0.1:8080",
     "http://localhost:5173", # ----------------------------------Vite's default
     "http://127.0.0.1:5173", # ----------------------------------same server, but the browser treats this spelling as a separate origin
     "http://localhost:3000", # ----------------------------------kept in case the frontend ends up on the React/Next default instead
@@ -69,6 +71,18 @@ def get_app_info():
 def start_session():
     session_id = repository.create_session()
     return {"session_id": session_id}
+
+@app.get("/api/geocode") # --------------------------------------the frontend asks for candidates so the user can disambiguate before anything is stored; create_lookup still geocodes on its own when no choice is supplied
+def geocode(
+    q: str = Query(min_length=1),
+    limit: int = Query(default=5, ge=1, le=5), # ----------------5 is OpenWeather's maximum, so anything higher would silently return fewer
+) -> dict:
+    try:
+        matches = geocode_location(q, limit=limit)
+    except requests.RequestException:
+        raise HTTPException(status_code=502, detail="Geocoding service is unavailable.")
+
+    return {"matches": matches} # -------------------------------an empty list means the place was not found; the frontend says so rather than treating it as a failure
 
 @app.get("/api/geocode/reverse") # ------------------------------the browser knows where the user is, but only as coordinates; naming the place needs the API key, so it happens here
 def reverse_geocode( # ------------------------------------------the bounds are the real ones for latitude and longitude, so nonsense never reaches OpenWeather
