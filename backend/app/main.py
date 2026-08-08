@@ -196,6 +196,6 @@ def get_lookup_videos(lookup_id: int) -> dict:
     if record is None:
         raise HTTPException(status_code=404, detail=f"No lookup found with id {lookup_id}.")
 
-    videos = search_walking_tour(record["location_name"], record["country"]) # ----no try/except: this client answers with an empty list instead of raising, so a YouTube outage can never turn into an error the weather app has to show
+    videos = search_walking_tour(record["location_name"], record["country"], record["state"]) # ----the state is passed so Paris, Texas does not return Paris, France; no try/except because this client answers with an empty list instead of raising, so a YouTube outage can never turn into an error the weather app has to show
 
     return {"videos": videos} # ---------------------------------an empty list means "no videos", whether none exist or the quota is gone; the frontend renders nothing either way and the page is unharmed

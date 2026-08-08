@@ -23,7 +23,15 @@ CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 # both geocoding directions answer with the same object shape, so they share one reader
 def parse_geocode_matches(fetched_data: list) -> list[dict]:
     matches = []
+    labels_already_seen = set() # --------------------------------------------OpenWeather returns "Paris, Ile-de-France, FR" three times out of five results, twice at identical coordinates and once at a point 3 km away.
+                                # --------------------------------------------Deduplicating on the label the user actually reads collapses all three; deduplicating on coordinates would leave two rows looking identical.
+                                # --------------------------------------------The discarded point is a few kilometres from the one kept, which does not matter for weather at city scale.
     for each_match in fetched_data:
+        label = (each_match["name"], each_match.get("state"), each_match["country"])
+        if label in labels_already_seen:
+            continue
+        labels_already_seen.add(label)
+
         matches.append({
             "name": each_match["name"],
             "state": each_match.get("state"), # ------------------------------.get() for avoiding KeyError and mirroring SQL TEXT and nullable,
@@ -47,19 +55,7 @@ def geocode_location(query: str, limit: int = 5) -> list[dict]: # -----------lim
     response = requests.get(GEOCODE_URL, params=params, timeout=10)
     response.raise_for_status()
 
-    matches = []
-    for each_match in response.json():
-        matches.append({
-            "name": each_match["name"],
-            "state": each_match.get("state"), # ------------------------------.get() for avoiding KeyError and mirroring SQL TEXT and nullable,
-                                              # -------------------------------since OpenWeather omits "state" whenever unavailable (or non-US results, tested),
-                                              # -------------------------------source: https://openweathermap.org/api/geocoding-api?collection=other
-
-            "country": each_match["country"], # -------------------------------SQL NOT NULL, so it's needed
-            "latitude": round(each_match["lat"], 4), # ------------------------keeping it 4 decimals
-            "longitude": round(each_match["lon"], 4),
-        })
-    return matches
+    return parse_geocode_matches(response.json()) # ----------------------------the shared reader, so the 4-decimal rounding and the duplicate-label filter apply to typed searches exactly as they do to coordinate lookups
 
 # OpenWeather Reverse Geocoding
 def reverse_geocode_location(latitude: float, longitude: float, limit: int = 1) -> list[dict]:
