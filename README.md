@@ -25,6 +25,7 @@ records to CSV.
 - [Design Decisions](#design-decisions)
 - [Requirement Coverage](#requirement-coverage)
 - [Known Simplifications](#known-simplifications)
+- [License](#license)
 
 ---
 
@@ -39,10 +40,17 @@ The live link: https://tony-weather-forecast.tonywang-br.workers.dev/
 
 ## The System
 
-The user enters a location in any form — city name, postal code, coordinates, or a landmark —
-and the app resolves it to a real place, shows current conditions and a forecast, and lets them
-save a location plus a date range as a persistent record they can read back, edit, delete, and
-export.
+The user enters a location as a town or city name — optionally narrowed with a state and country,
+as in `Paris, Texas, US` — as a postal code, or as a pair of coordinates; they can also ask the
+browser for their current position. The app resolves whichever form was given to a real place,
+offering up to five ranked candidates when the input is ambiguous, then shows current conditions and
+a forecast and lets them save a location plus a date range as a persistent record they can read
+back, edit, delete, and export.
+
+Each input form is answered by the endpoint built for it. A postal code goes to OpenWeather's
+postal-code endpoint rather than its place-name one, which had answered `10001` with a village in
+Ireland. A typed coordinate pair asks the same question as the browser's geolocation, so it is
+routed to the same reverse lookup.
 
 Two weather providers are used deliberately, each for what it does best:
 
@@ -167,6 +175,27 @@ local use. Set that variable only if the backend runs elsewhere.
 
 Both servers must be running: the page loads without the backend, but every request fails.
 
+### Deployment
+
+The live version runs the frontend on Cloudflare Workers and the backend on Render.
+
+The backend deploys on push. Its build command is `pip install -r backend/requirements.txt` and its
+start command is `uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend`, with the two
+API keys set as environment variables. Two settings are not obvious: the health check path must be
+`/api/info` rather than `/`, and `WEATHER_DB_PATH` points the SQLite file at a writable directory,
+since the application directory may not be.
+
+The frontend deploys with one command from `frontend`:
+
+```bash
+npm run deploy
+```
+
+That builds, corrects the generated worker name, and publishes. The correction is necessary because
+the build names the worker after the repository directory, which exceeds Cloudflare's 63-character
+limit for a subdomain. `frontend/.env.production` supplies the deployed backend URL, and it is baked
+in at build time, so changing it requires rebuilding.
+
 ---
 
 ## API Reference
@@ -175,7 +204,7 @@ Both servers must be running: the page loads without the backend, but every requ
 |---|---|---|
 | `GET` | `/api/info` | Developer details and PM Accelerator description |
 | `POST` | `/api/sessions` | Start a visit; returns a `session_id` |
-| `GET` | `/api/geocode?q=&limit=` | Up to 5 ranked candidate places, so the user can disambiguate before anything is stored |
+| `GET` | `/api/geocode?q=&limit=` | Resolves a place name, a postal code, or a coordinate pair; up to 5 ranked candidates so the user can disambiguate before anything is stored |
 | `GET` | `/api/geocode/reverse?lat=&lon=` | Resolve browser-reported coordinates to a place name |
 | `POST` | `/api/lookups` | **Create** — validate, fetch from both providers, persist |
 | `GET` | `/api/lookups` | **Read all** — every stored record, newest first |
@@ -284,9 +313,18 @@ Deliberate trade-offs, noted rather than hidden:
 - **`LookupRecord` describes the detail response, and list rows are cast to it.** `GET /api/lookups`
   returns a summary without daily rows or coordinates. Splitting the type into a summary and a
   detail record would make that impossible to confuse.
+- **Postal codes work only where the provider has coverage.** The United States, France, and Germany
+  were verified; Brazil is not supported, so a CEP such as `85010-000` returns no match. A postal
+  code with no country is assumed to be American, which is OpenWeather's own default.
+- **Landmarks are not supported.** OpenWeather geocodes populated places, not points of interest,
+  so `Statue of Liberty` and `Eiffel Tower` return nothing. A landmark that shares its name with a
+  settlement resolves anyway — `Cataratas` finds Cataratas, Paraná — but that is a coincidence
+  rather than a capability. Supporting landmarks properly would mean adding a second geocoder such
+  as Nominatim or GeoNames. The assessment leaves the input method to the implementer, and place
+  names, postal codes, coordinates, and browser geolocation were judged sufficient coverage.
 
 ---
 
 ## License
 
-<!-- TODO: optional. MIT is a reasonable default for a public assessment repo. -->
+MIT — see [`LICENSE`](LICENSE). Copyright © 2026 Tony Wang.
