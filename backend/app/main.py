@@ -16,7 +16,8 @@ init_db()
 app = FastAPI(title="Weather App API")
 
 ALLOWED_ORIGINS = [ # -------------------------------------------the frontend dev server runs on its own port, so it counts as a different origin from uvicorn
-    "http://localhost:8080",  # ----------------------------------what this project's Vite config actually serves on
+    "https://tony-weather-forecast.tonywang-br.workers.dev", # --the deployed frontend on Cloudflare Workers
+    "http://localhost:8080",  # ---------------------------------what this project's Vite config actually serves on
     "http://127.0.0.1:8080",
     "http://localhost:5173", # ----------------------------------Vite's default
     "http://127.0.0.1:5173", # ----------------------------------same server, but the browser treats this spelling as a separate origin
