@@ -32,6 +32,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/") # -------------------------------------------------a bare 404 at the root reads as a broken deployment, and platform health checks probe here by default
+def get_root():
+    return {"status": "ok", "docs": "/docs", "api": "/api/info"}
+
 @app.get("/api/info") # ----------------------------------------get things via APIs
 def get_app_info():
     return {
