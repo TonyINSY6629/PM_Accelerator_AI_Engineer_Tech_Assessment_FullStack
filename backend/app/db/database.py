@@ -1,8 +1,9 @@
 import sqlite3
 from pathlib import Path
+import os
 
 DB_DIR = Path(__file__).resolve().parent
-DB_PATH = DB_DIR / "weather.db"
+DB_PATH = Path(os.getenv("WEATHER_DB_PATH", DB_DIR / "weather.db"))
 SCHEMA_PATH = DB_DIR / "schema.sql"
 SEED_PATH = DB_DIR / "seed.sql"
 
