@@ -18,6 +18,7 @@ if not OPENWEATHER_API_KEY:
 
 GEOCODE_URL = "https://api.openweathermap.org/geo/1.0/direct"
 REVERSE_GEOCODE_URL = "https://api.openweathermap.org/geo/1.0/reverse" # -------coordinates back to a place name, for the browser's "use my current location"
+ZIP_GEOCODE_URL = "https://api.openweathermap.org/geo/1.0/zip" # ---------------postal codes have their own endpoint; sending "10001" to /direct returned a village in Ireland, which is worse than returning nothing
 CURRENT_WEATHER_URL = "https://api.openweathermap.org/data/2.5/weather"
 
 # both geocoding directions answer with the same object shape, so they share one reader
@@ -69,6 +70,21 @@ def reverse_geocode_location(latitude: float, longitude: float, limit: int = 1) 
     response.raise_for_status()
 
     return parse_geocode_matches(response.json())
+
+# OpenWeather Postal Code Geocoding
+def zip_geocode_location(postal_code: str, country_code: str = "US") -> list[dict]:
+    params = {
+        "zip": f"{postal_code},{country_code}", # ----------------------------OpenWeather's convention is one combined parameter, not two separate ones
+        "appid": OPENWEATHER_API_KEY,
+    }
+    response = requests.get(ZIP_GEOCODE_URL, params=params, timeout=10)
+
+    if response.status_code == 404: # ----------------------------------------an unrecognised postal code is answered with 404, which means "no such place" and not "the provider is broken", so it must not be allowed to become a 502
+        return []
+
+    response.raise_for_status()
+
+    return parse_geocode_matches([response.json()]) # ------------------------this endpoint answers with a single object rather than a list, and carries no "state"; both are already tolerated by the shared reader
 
 # fetching current weather
 def fetch_current_weather(latitude: float, longitude: float) -> dict: # -------using lat-long as intended

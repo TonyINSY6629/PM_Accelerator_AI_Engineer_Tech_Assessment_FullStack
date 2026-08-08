@@ -9,9 +9,11 @@ type ForecastRowProps = {
 export function ForecastRow({ daily }: ForecastRowProps) {
   return (
     <div className="board rounded-xl p-5">
-      <h3 className="text-lg font-semibold tracking-tight text-foreground">5-Day Forecast</h3>
+      <h3 className="text-lg font-semibold tracking-tight text-foreground">
+        {daily.length === 1 ? "Forecast" : `${daily.length}-Day Forecast`}
+      </h3>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
-        {daily.slice(0, 5).map((day) => (
+        {daily.map((day) => (
           <DayCard key={day.date} day={day} />
         ))}
       </div>

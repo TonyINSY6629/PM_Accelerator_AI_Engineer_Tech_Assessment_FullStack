@@ -3,12 +3,12 @@ from fastapi import FastAPI, HTTPException, Query, Response #to build REST API, 
 from fastapi.middleware.cors import CORSMiddleware # ----------the browser refuses any cross-origin reply the server has not opted into
 from pydantic import BaseModel
 
-from app.clients.openweather import geocode_location, reverse_geocode_location
+from app.clients.openweather import geocode_location, reverse_geocode_location, zip_geocode_location
 from app.clients.youtube import search_walking_tour
 from app.db.database import init_db
 from app.db import repository
 from app.services import lookups
-from app.services.validation import ValidationError
+from app.services.validation import ValidationError, parse_coordinates, parse_postal_code
 from app.services import export as export_service
 
 init_db()
@@ -73,7 +73,17 @@ def geocode(
     limit: int = Query(default=5, ge=1, le=5), # ----------------5 is OpenWeather's maximum, so anything higher would silently return fewer
 ) -> dict:
     try:
-        matches = geocode_location(q, limit=limit)
+        coordinates = parse_coordinates(q) # --------------------a typed "40.7128,-74.0060" asks the same question as the browser's geolocation, so it is answered by the same reverse lookup rather than being sent to a place-name search that would find nothing
+        postal_code = parse_postal_code(q) if coordinates is None else None # ----postal codes live on their own OpenWeather endpoint; coordinates are tested first because both forms begin with a digit
+
+        if coordinates is not None:
+            matches = reverse_geocode_location(*coordinates)
+        elif postal_code is not None:
+            matches = zip_geocode_location(*postal_code)
+        else:
+            matches = geocode_location(q, limit=limit)
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error))
     except requests.RequestException:
         raise HTTPException(status_code=502, detail="Geocoding service is unavailable.")
 
