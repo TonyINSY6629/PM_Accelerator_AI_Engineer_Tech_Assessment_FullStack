@@ -33,6 +33,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# turning a failed outbound call into a 502 that says which provider failed and, when the provider answered at all, with what status
+def upstream_failure(error: requests.RequestException, service_name: str) -> HTTPException:
+    upstream = getattr(error, "response", None) # ---------------requests attaches the response only when the failure was an HTTP status; a timeout or a refused connection leaves this as None
+
+    if upstream is None:
+        return HTTPException(status_code=502, detail=f"{service_name} is unavailable.")
+
+    return HTTPException( # -------------------------------------a rate limit, an expired key and a provider outage are three different problems, and a bare "unavailable" hides which one occurred
+        status_code=502,
+        detail=f"{service_name} is unavailable (upstream returned {upstream.status_code}).",
+    )
+
+
 @app.get("/") # -------------------------------------------------a bare 404 at the root reads as a broken deployment, and platform health checks probe here by default
 def get_root():
     return {"status": "ok", "docs": "/docs", "api": "/api/info"}
@@ -84,8 +97,8 @@ def geocode(
             matches = geocode_location(q, limit=limit)
     except ValidationError as error:
         raise HTTPException(status_code=422, detail=str(error))
-    except requests.RequestException:
-        raise HTTPException(status_code=502, detail="Geocoding service is unavailable.")
+    except requests.RequestException as error:
+        raise upstream_failure(error, "Geocoding service")
 
     return {"matches": matches} # -------------------------------an empty list means the place was not found; the frontend says so rather than treating it as a failure
 
@@ -96,8 +109,8 @@ def reverse_geocode( # ------------------------------------------the bounds are 
 ) -> dict:
     try:
         matches = reverse_geocode_location(lat, lon)
-    except requests.RequestException:
-        raise HTTPException(status_code=502, detail="Geocoding service is unavailable.")
+    except requests.RequestException as error:
+        raise upstream_failure(error, "Geocoding service")
 
     return {"matches": matches} # -------------------------------an empty list is a normal answer, not an error: coordinates in open water simply have no place name, and the frontend falls back to typing
 
@@ -122,8 +135,8 @@ def create_lookup(request: LookupRequest):
         )
     except ValidationError as error:
         raise HTTPException(status_code=422, detail=str(error))
-    except requests.RequestException:
-        raise HTTPException(status_code=502, detail="Weather service is unavailable.")
+    except requests.RequestException as error:
+        raise upstream_failure(error, "Weather service")
 
     return {"lookup_id": lookup_id}
 
@@ -169,8 +182,8 @@ def update_one_lookup(lookup_id: int, request: LookupUpdateRequest) -> dict:
         )
     except ValidationError as error:
         raise HTTPException(status_code=422, detail=str(error))
-    except requests.RequestException:
-        raise HTTPException(status_code=502, detail="Weather service is unavailable.")
+    except requests.RequestException as error:
+        raise upstream_failure(error, "Weather service")
 
     if updated_record is None:
         raise HTTPException(status_code=404, detail=f"No lookup found with id {lookup_id}.")
