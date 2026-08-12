@@ -322,6 +322,14 @@ Deliberate trade-offs, noted rather than hidden:
   rather than a capability. Supporting landmarks properly would mean adding a second geocoder such
   as Nominatim or GeoNames. The assessment leaves the input method to the implementer, and place
   names, postal codes, coordinates, and browser geolocation were judged sufficient coverage.
+- **The deployed backend can hit Open-Meteo's per-IP rate limit.** Render's free tier shares an
+  outbound IP address between services, and Open-Meteo's free tier limits by IP, so the deployment
+  can receive HTTP 429 for reasons unrelated to this application's own traffic. Searching still
+  works, since geocoding uses a different provider, but saving a lookup fails until the quota
+  resets. The failure is reported honestly rather than hidden: `502` responses carry the upstream
+  status, so a rate limit, an expired key, and a genuine outage are distinguishable from outside.
+  The same code runs without issue locally, where the address is not shared. A dedicated egress IP,
+  a different host, or a commercial Open-Meteo plan would each remove the problem.
 
 ---
 
