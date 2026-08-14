@@ -1,0 +1,20 @@
+# Secrets must never enter the image — Fly supplies them as runtime secrets instead
+**/.env
+
+# The virtual environment is hundreds of megabytes and is rebuilt by pip inside the image
+**/.venv/
+
+# Local database; the container creates its own at WEATHER_DB_PATH
+*.db
+**/*.db
+
+**/__pycache__/
+**/*.pyc
+
+# Not part of the backend image
+frontend/
+docs/
+.git/
+.idea/
+*.pdf
+*.docx

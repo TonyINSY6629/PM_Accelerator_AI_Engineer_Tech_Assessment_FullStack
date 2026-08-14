@@ -177,15 +177,24 @@ Both servers must be running: the page loads without the backend, but every requ
 
 ### Deployment
 
-The live version runs the frontend on Cloudflare Workers and the backend on Render.
+The live version runs the frontend on Cloudflare Workers and the backend on Fly.io.
 
-The backend deploys on push. Its build command is `pip install -r backend/requirements.txt` and its
-start command is `uvicorn app.main:app --host 0.0.0.0 --port $PORT --app-dir backend`, with the two
-API keys set as environment variables. Two settings are not obvious: the health check path must be
-`/api/info` rather than `/`, and `WEATHER_DB_PATH` points the SQLite file at a writable directory,
-since the application directory may not be.
+**Backend.** The `Dockerfile` at the repository root builds the API image; `fly deploy` publishes it.
+The two API keys are supplied as Fly secrets rather than baked into the image, which is why `.env`
+is listed in `.dockerignore`. Three settings are load-bearing:
 
-The frontend deploys with one command from `frontend`:
+- `WEATHER_DB_PATH` points the SQLite file at `/data`, a mounted volume, so saved records survive a
+  restart. A container filesystem does not.
+- The app must run **exactly one machine** (`fly scale count 1`). A SQLite database is a file on one
+  instance, so two machines would each hold their own copy and disagree — a session created on one
+  would not exist on the other, and the foreign key from `lookup` to `session` would reject the
+  insert. A volume attaches to a single machine in any case.
+- `--host 0.0.0.0` in the start command. The default `127.0.0.1` accepts connections only from
+  inside the container, so the platform's router would never reach it.
+
+The backend was originally on Render; see Known Simplifications for why it moved.
+
+**Frontend.** One command from `frontend`:
 
 ```bash
 npm run deploy
@@ -322,14 +331,21 @@ Deliberate trade-offs, noted rather than hidden:
   rather than a capability. Supporting landmarks properly would mean adding a second geocoder such
   as Nominatim or GeoNames. The assessment leaves the input method to the implementer, and place
   names, postal codes, coordinates, and browser geolocation were judged sufficient coverage.
-- **The deployed backend can hit Open-Meteo's per-IP rate limit.** Render's free tier shares an
-  outbound IP address between services, and Open-Meteo's free tier limits by IP, so the deployment
-  can receive HTTP 429 for reasons unrelated to this application's own traffic. Searching still
-  works, since geocoding uses a different provider, but saving a lookup fails until the quota
-  resets. The failure is reported honestly rather than hidden: `502` responses carry the upstream
-  status, so a rate limit, an expired key, and a genuine outage are distinguishable from outside.
-  The same code runs without issue locally, where the address is not shared. A dedicated egress IP,
-  a different host, or a commercial Open-Meteo plan would each remove the problem.
+- **Proxying every provider call concentrates rate limits onto one IP address.** Keeping the API key
+  server-side means the browser never contacts a weather provider, so Open-Meteo only ever sees the
+  host's outbound address. On the original Render deployment that address was shared between
+  customers, and because Open-Meteo's free tier limits by IP rather than by key, the deployment
+  received HTTP 429 for traffic that was not its own — for four days, while the same code ran
+  normally on a local machine. Searching kept working throughout, since OpenWeather limits per key,
+  and that contrast is what identified the cause: same host, same network, same moment, different
+  counting policy. The backend was moved to Fly.io, whose address is not exhausted, and `502`
+  responses now carry the upstream status so a rate limit, an expired key, and a genuine outage
+  remain distinguishable from outside. The underlying trade-off has not gone away: a proxy that
+  protects a credential also pools everyone's requests behind one address.
+- **A SQLite database requires a single application instance.** The database is a file, so two
+  instances would hold two copies rather than share one. The deployment therefore runs one machine
+  with a mounted volume. A client-server database such as PostgreSQL would lift the restriction, and
+  the schema is standard SQL that would port unchanged.
 
 ---
 
